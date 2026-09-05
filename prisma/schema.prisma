@@ -1,0 +1,115 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String?
+  name          String?
+  role          Role      @default(USER)
+
+  expertise     String?
+  lanes         Json?     
+  budgetMin     Float?
+  budgetMax     Float?
+  keywords      String?
+  timezone      String?
+  skills        Json?     
+  upworkCookies String?   @db.Text
+  autoSubmit    Boolean   @default(false)
+
+  // Client-quality filters — all user-configurable via Settings, no hardcoding
+  excludedRegions        Json?    // e.g. ["Kenya", "Nigeria"] — client countries to always skip
+  minHireRate             Float?   // 0-100, client's % of jobs where they hired someone
+  minTotalSpent           Float?   // minimum $ the client has spent on Upwork historically
+  requirePaymentVerified  Boolean  @default(false)
+
+  jobs          Job[]
+  proposals     Proposal[]
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Job {
+  id            String    @id @default(cuid())
+  upworkId      String    @unique
+  title         String
+  description   String   @db.Text
+  budget        Float?
+  currency      String?   @default("USD")
+  skills        Json?     
+  url           String?   @db.Text
+  matchScore    Float?
+  lane          String?
+  status        JobStatus @default(PENDING)
+
+  isSuspicious     Boolean  @default(false)
+  suspicionReasons String?  @db.Text
+
+  // Client info captured from the job detail page — used for region/hire-rate/
+  // spend/payment-verified filtering, and displayed in the UI for transparency.
+  clientCountry           String?
+  clientHireRate          Float?
+  clientTotalSpent        Float?
+  clientPaymentVerified   Boolean?
+  filteredReason          String?  @db.Text // why this job was excluded, if it was
+
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+
+  proposals     Proposal[]
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Proposal {
+  id            String        @id @default(cuid())
+  content       String        @db.Text
+  status        ProposalStatus @default(DRAFT)
+  jobId         String
+  job           Job           @relation(fields: [jobId], references: [id])
+  userId        String
+  user          User          @relation(fields: [userId], references: [id])
+
+  sentAt        DateTime?
+  viewedAt      DateTime?
+  repliedAt     DateTime?
+  hiredAt       DateTime?
+  revenue       Float?
+  submitError   String?       @db.Text
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum JobStatus {
+  PENDING
+  MATCHED
+  PROPOSAL_SENT
+  PROPOSAL_FAILED
+  IGNORED
+  HIRED
+}
+
+enum ProposalStatus {
+  DRAFT
+  GENERATED
+  SENT
+  FAILED
+  VIEWED
+  REPLIED
+  HIRED
+}
