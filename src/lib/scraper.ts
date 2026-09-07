@@ -115,7 +115,8 @@ export async function scrapeJobs(userId: string): Promise<ScrapedJob[]> {
   // similar bot-detection. It's a drop-in Playwright replacement, so the rest
   // of this code (context, page, selectors) is unchanged.
   const { launch } = await import('cloakbrowser')
-  const browser = await launch({ headless: false })
+
+  const browser = await launch({ headless: process.env.HEADLESS === 'false' ? false : true })
   const context = await browser.newContext({
     viewport: { width: 1280, height: 720 }
   })
