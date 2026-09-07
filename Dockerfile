@@ -10,7 +10,10 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
+# Copy the Prisma schema BEFORE running npm install, since the postinstall
+# hook ("prisma generate") needs prisma/schema.prisma to exist at that point.
 COPY package*.json ./
+COPY prisma ./prisma
 RUN npm install
 
 COPY . .
