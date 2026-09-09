@@ -4,8 +4,10 @@
 // runtime). To avoid cross-package type conflicts, we type page params as
 // `any` here rather than importing Page from 'playwright'.
 
+
 import { prisma } from './prisma'
 import { sanitizeCookiesForPlaywright } from './cookies'
+import { solveTurnstileWithNathcf } from './captchaSolver'
 
 export interface ScrapedJob {
   upworkId: string
@@ -35,12 +37,48 @@ function parseSpend(text: string): number | null {
 // If Cloudflare's "Verify you are human" challenge is showing, wait a bit for a
 // human to solve it manually in the visible browser window instead of failing
 // immediately. Checks repeatedly for up to `maxWaitMs`.
+
+
 async function waitForCloudflareIfPresent(page: any, maxWaitMs = 60000): Promise<boolean> {
+  const text = await page.textContent('body').catch(() => '')
+  const blocked = text?.includes('Verify you are human') || text?.includes('Cloudflare Ray ID')
+  if (!blocked) return true
+
+  console.log('🤖 Cloudflare challenge detected — attempting auto-solve via nathcf...')
+  const url = page.url()
+  const token = await solveTurnstileWithNathcf(url)
+
+  if (token) {
+    const injected = await page.evaluate((t: string) => {
+      const input = document.querySelector('input[name="cf-turnstile-response"]') as HTMLInputElement | null
+      if (input) input.value = t
+
+      const widget = document.querySelector('[data-callback]') as HTMLElement | null
+      const callbackName = widget?.getAttribute('data-callback')
+      if (callbackName && typeof (window as any)[callbackName] === 'function') {
+        ;(window as any)[callbackName](t)
+        return true
+      }
+      return !!input
+    }, token)
+
+    if (injected) {
+      console.log('✅ Turnstile token injected via nathcf')
+      await page.waitForTimeout(3000)
+      const stillBlockedText = await page.textContent('body').catch(() => '')
+      const stillBlocked = stillBlockedText?.includes('Verify you are human')
+      if (!stillBlocked) return true
+    }
+    console.log('⚠️ nathcf token injection did not clear the challenge, falling back to manual wait...')
+  } else {
+    console.log('⚠️ nathcf could not solve the challenge, falling back to manual wait...')
+  }
+
   const start = Date.now()
   while (Date.now() - start < maxWaitMs) {
-    const text = await page.textContent('body').catch(() => '')
-    const blocked = text?.includes('Verify you are human') || text?.includes('Cloudflare Ray ID')
-    if (!blocked) return true
+    const currentText = await page.textContent('body').catch(() => '')
+    const currentlyBlocked = currentText?.includes('Verify you are human') || currentText?.includes('Cloudflare Ray ID')
+    if (!currentlyBlocked) return true
     console.log('⏳ Cloudflare challenge showing — please click the checkbox in the browser window. Waiting...')
     await page.waitForTimeout(3000)
   }
