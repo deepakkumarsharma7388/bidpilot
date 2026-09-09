@@ -22,7 +22,6 @@
     "ioredis": "^5.4.1",
     "lucide-react": "^0.454.0",
     "mysql2": "^3.11.0",
-    "nathcf": "^1.0.1",
     "next": "^15.1.11",
     "next-auth": "5.0.0-beta.25",
     "openai": "^4.77.0",
